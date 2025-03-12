@@ -40,6 +40,7 @@
   <h1>Edit Student Data by Group</h1>
   <input type="text" id="groupName" placeholder="Enter Group Name">
   <button onclick="loadGroupStudents()">Search Group</button>
+  <button onclick="saveAllChanges()" id="saveAllButton" class="hidden">Save All Changes</button>
   <div id="groupStudentsList"></div>
 
   <script type="module">
@@ -61,6 +62,8 @@
     // Initialize Firebase
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
+
+    let studentsInGroup = []; // Store loaded students globally
 
     // Function to load students in a group and display them for editing
     window.loadGroupStudents = async function () {
@@ -85,7 +88,7 @@
 
         // Fetch student details
         const studentsSnapshot = await getDocs(collection(db, 'students'));
-        const studentsInGroup = studentsSnapshot.docs
+        studentsInGroup = studentsSnapshot.docs
           .filter(doc => studentIds.includes(doc.id))
           .map(doc => ({ id: doc.id, ...doc.data() }));
 
@@ -99,7 +102,6 @@
                 <th>Attendance</th>
                 <th>Marks</th>
                 <th>Semester</th>
-                <th>Action</th>
               </tr>
             </thead>
             <tbody>
@@ -113,12 +115,9 @@
               <td><input type="number" id="attendance_${student.id}" value="${student.attendance}"></td>
               <td><input type="number" id="marks_${student.id}" value="${student.marks}"></td>
               <td><input type="text" id="semester_${student.id}" value="${student.semester}"></td>
-              <td>
-                <button onclick="saveStudentData('${student.id}')">Save</button>
-              </td>
             </tr>
             <tr>
-              <td colspan="6">
+              <td colspan="5">
                 <h4>Courses</h4>
                 <table>
                   <thead>
@@ -127,6 +126,7 @@
                       <th>Score</th>
                       <th>GPA</th>
                       <th>Remark</th>
+                      <th>Action</th>
                     </tr>
                   </thead>
                   <tbody id="courses_${student.id}">
@@ -162,39 +162,17 @@
             `;
           });
         });
+
+        // Show the "Save All" button
+        document.getElementById('saveAllButton').classList.remove('hidden');
       } catch (error) {
         console.error('Error loading group students: ', error);
         alert('Error loading group students. Please try again.');
       }
     };
 
-    // Function to save updated student data
-    window.saveStudentData = async function (studentId) {
-      const name = document.getElementById(`name_${studentId}`).value;
-      const grade = document.getElementById(`grade_${studentId}`).value;
-      const attendance = document.getElementById(`attendance_${studentId}`).value;
-      const marks = document.getElementById(`marks_${studentId}`).value;
-      const semester = document.getElementById(`semester_${studentId}`).value;
-
-      const updatedData = {
-        name,
-        grade,
-        attendance: parseFloat(attendance),
-        marks: parseFloat(marks),
-        semester
-      };
-
-      try {
-        await updateDoc(doc(db, 'students', studentId), updatedData);
-        alert('Student data updated successfully!');
-      } catch (error) {
-        console.error('Error updating student data: ', error);
-        alert('Error updating student data. Please try again.');
-      }
-    };
-
     // Function to add a new course
-    window.addCourse = async function (studentId) {
+    window.addCourse = function (studentId) {
       const coursesTbody = document.getElementById(`courses_${studentId}`);
       const index = coursesTbody.children.length;
 
@@ -210,33 +188,48 @@
     };
 
     // Function to remove a course
-    window.removeCourse = async function (studentId, index) {
+    window.removeCourse = function (studentId, index) {
       const coursesTbody = document.getElementById(`courses_${studentId}`);
       coursesTbody.removeChild(coursesTbody.children[index]);
     };
 
-    // Function to update courses for a student
-    window.updateCourses = async function (studentId) {
-      const coursesTbody = document.getElementById(`courses_${studentId}`);
-      const courses = [];
-
-      for (let i = 0; i < coursesTbody.children.length; i++) {
-        const course = {
-          name: document.getElementById(`courseName_${studentId}_${i}`).value,
-          score: parseFloat(document.getElementById(`courseScore_${studentId}_${i}`).value),
-          gpa: parseFloat(document.getElementById(`courseGPA_${studentId}_${i}`).value),
-          remark: document.getElementById(`courseRemark_${studentId}_${i}`).value
-        };
-        courses.push(course);
-      }
-
+    // Function to save all changes
+    window.saveAllChanges = async function () {
       try {
-        await updateDoc(doc(db, 'students', studentId), { courses });
-        alert('Courses updated successfully!');
-        loadGroupStudents(); // Refresh the student list
+        for (const student of studentsInGroup) {
+          const studentId = student.id;
+
+          // Update student data
+          const updatedData = {
+            name: document.getElementById(`name_${studentId}`).value,
+            grade: document.getElementById(`grade_${studentId}`).value,
+            attendance: parseFloat(document.getElementById(`attendance_${studentId}`).value),
+            marks: parseFloat(document.getElementById(`marks_${studentId}`).value),
+            semester: document.getElementById(`semester_${studentId}`).value,
+          };
+
+          // Update courses
+          const coursesTbody = document.getElementById(`courses_${studentId}`);
+          const courses = [];
+          for (let i = 0; i < coursesTbody.children.length; i++) {
+            const course = {
+              name: document.getElementById(`courseName_${studentId}_${i}`).value,
+              score: parseFloat(document.getElementById(`courseScore_${studentId}_${i}`).value),
+              gpa: parseFloat(document.getElementById(`courseGPA_${studentId}_${i}`).value),
+              remark: document.getElementById(`courseRemark_${studentId}_${i}`).value,
+            };
+            courses.push(course);
+          }
+          updatedData.courses = courses;
+
+          // Save to Firestore
+          await updateDoc(doc(db, 'students', studentId), updatedData);
+        }
+
+        alert('All changes saved successfully!');
       } catch (error) {
-        console.error('Error updating courses: ', error);
-        alert('Error updating courses. Please try again.');
+        console.error('Error saving changes: ', error);
+        alert('Error saving changes. Please try again.');
       }
     };
   </script>
