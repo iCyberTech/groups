@@ -5,34 +5,89 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Edit Student Data by Group</title>
   <style>
+    /* General styles */
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f4f4f9;
+    }
+
+    /* Input field styling */
+    input[type="text"] {
+      width: 100%;
+      padding: 10px;
+      margin: 10px 0;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      font-size: 1em;
+    }
+
+    /* Button styling */
+    button {
+      margin: 5px;
+      padding: 10px 20px;
+      font-size: 1em;
+      cursor: pointer;
+      background-color: #2d89ef;
+      color: white;
+      border: none;
+      border-radius: 5px;
+    }
+
+    button:hover {
+      background-color: #1e5bbf;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    /* Table styling */
     table {
       width: 100%;
       border-collapse: collapse;
       margin-top: 20px;
     }
+
     th, td {
       border: 1px solid #ddd;
       padding: 8px;
       text-align: left;
     }
+
     th {
       background-color: #f2f2f2;
     }
-    button {
-      margin: 5px;
-      padding: 5px 10px;
-      cursor: pointer;
-    }
-    .hidden {
+
+    /* Modal styling */
+    .modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.5);
       display: none;
+      justify-content: center;
+      align-items: center;
     }
-    textarea {
-      width: 100%;
-      height: 100px;
+
+    .modal-content {
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      width: 300px;
+      text-align: center;
     }
-    input[type="text"], input[type="number"] {
-      width: 100%;
-      padding: 5px;
+
+    .modal-content ul {
+      list-style: none;
+      padding: 0;
+    }
+
+    .modal-content li {
+      margin: 10px 0;
     }
   </style>
 </head>
@@ -40,8 +95,19 @@
   <h1>Edit Student Data by Group</h1>
   <input type="text" id="groupName" placeholder="Enter Group Name">
   <button onclick="loadGroupStudents()">Search Group</button>
+  <button onclick="openAddStudentsModal()">Add Students to Group</button>
   <button onclick="saveAllChanges()" id="saveAllButton" class="hidden">Save All Changes</button>
   <div id="groupStudentsList"></div>
+
+  <!-- Add Students Modal -->
+  <div class="modal" id="addStudentsModal">
+    <div class="modal-content">
+      <h2>Add Students to Group</h2>
+      <ul id="studentsList"></ul>
+      <button onclick="addSelectedStudents()">Add Selected</button>
+      <button onclick="closeAddStudentsModal()">Close</button>
+    </div>
+  </div>
 
   <script type="module">
     // Import Firebase SDK
@@ -64,6 +130,8 @@
     const db = getFirestore(app);
 
     let studentsInGroup = []; // Store loaded students globally
+    let allStudents = []; // Store all students for the add students modal
+    let selectedStudents = []; // Store selected students to add to the group
 
     // Function to load students in a group and display them for editing
     window.loadGroupStudents = async function () {
@@ -102,6 +170,7 @@
                 <th>Attendance</th>
                 <th>Marks</th>
                 <th>Semester</th>
+                <th>Action</th>
               </tr>
             </thead>
             <tbody>
@@ -115,9 +184,10 @@
               <td><input type="number" id="attendance_${student.id}" value="${student.attendance}"></td>
               <td><input type="number" id="marks_${student.id}" value="${student.marks}"></td>
               <td><input type="text" id="semester_${student.id}" value="${student.semester}"></td>
+              <td><button onclick="removeStudentFromGroup('${student.id}')">Remove</button></td>
             </tr>
             <tr>
-              <td colspan="5">
+              <td colspan="6">
                 <h4>Courses</h4>
                 <table>
                   <thead>
@@ -196,8 +266,11 @@
     // Function to save all changes
     window.saveAllChanges = async function () {
       try {
+        console.log('Saving changes...'); // Debugging
+
         for (const student of studentsInGroup) {
           const studentId = student.id;
+          console.log('Processing student:', studentId); // Debugging
 
           // Update student data
           const updatedData = {
@@ -207,6 +280,8 @@
             marks: parseFloat(document.getElementById(`marks_${studentId}`).value),
             semester: document.getElementById(`semester_${studentId}`).value,
           };
+
+          console.log('Updated Data:', updatedData); // Debugging
 
           // Update courses
           const coursesTbody = document.getElementById(`courses_${studentId}`);
@@ -223,13 +298,120 @@
           updatedData.courses = courses;
 
           // Save to Firestore
-          await updateDoc(doc(db, 'students', studentId), updatedData);
+          const studentDocRef = doc(db, 'students', studentId);
+          console.log('Updating Firestore document:', studentDocRef.path); // Debugging
+          await updateDoc(studentDocRef, updatedData);
+          console.log('Firestore document updated successfully.'); // Debugging
         }
 
         alert('All changes saved successfully!');
       } catch (error) {
         console.error('Error saving changes: ', error);
         alert('Error saving changes. Please try again.');
+      }
+    };
+
+    // Function to open the add students modal
+    window.openAddStudentsModal = async function () {
+      const modal = document.getElementById('addStudentsModal');
+      const studentsList = document.getElementById('studentsList');
+
+      // Fetch all students
+      const studentsSnapshot = await getDocs(collection(db, 'students'));
+      allStudents = studentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+      // Display students in the modal
+      studentsList.innerHTML = allStudents.map(student => `
+        <li>
+          <input type="checkbox" id="student_${student.id}" value="${student.id}">
+          <label for="student_${student.id}">${student.name}</label>
+        </li>
+      `).join('');
+
+      // Show the modal
+      modal.style.display = 'flex';
+    };
+
+    // Function to close the add students modal
+    window.closeAddStudentsModal = function () {
+      const modal = document.getElementById('addStudentsModal');
+      modal.style.display = 'none';
+    };
+
+    // Function to add selected students to the group
+    window.addSelectedStudents = async function () {
+      const groupName = document.getElementById('groupName').value;
+      if (!groupName) {
+        alert('Please enter a group name.');
+        return;
+      }
+
+      // Get selected students
+      selectedStudents = [];
+      allStudents.forEach(student => {
+        const checkbox = document.getElementById(`student_${student.id}`);
+        if (checkbox.checked) {
+          selectedStudents.push(student.id);
+        }
+      });
+
+      if (selectedStudents.length === 0) {
+        alert('Please select at least one student.');
+        return;
+      }
+
+      try {
+        // Fetch the group document
+        const groupDocRef = doc(db, 'groups', groupName);
+        const groupDoc = await getDoc(groupDocRef);
+
+        if (!groupDoc.exists()) {
+          alert('Group not found.');
+          return;
+        }
+
+        // Update the group's students list
+        const groupData = groupDoc.data();
+        const updatedStudents = [...new Set([...groupData.students, ...selectedStudents])]; // Avoid duplicates
+
+        await updateDoc(groupDocRef, { students: updatedStudents });
+        alert('Students added to the group successfully!');
+        closeAddStudentsModal();
+        loadGroupStudents(); // Refresh the group students list
+      } catch (error) {
+        console.error('Error adding students to group: ', error);
+        alert('Error adding students to group. Please try again.');
+      }
+    };
+
+    // Function to remove a student from the group
+    window.removeStudentFromGroup = async function (studentId) {
+      const groupName = document.getElementById('groupName').value;
+      if (!groupName) {
+        alert('Please enter a group name.');
+        return;
+      }
+
+      try {
+        // Fetch the group document
+        const groupDocRef = doc(db, 'groups', groupName);
+        const groupDoc = await getDoc(groupDocRef);
+
+        if (!groupDoc.exists()) {
+          alert('Group not found.');
+          return;
+        }
+
+        // Remove the student from the group's students list
+        const groupData = groupDoc.data();
+        const updatedStudents = groupData.students.filter(id => id !== studentId);
+
+        await updateDoc(groupDocRef, { students: updatedStudents });
+        alert('Student removed from the group successfully!');
+        loadGroupStudents(); // Refresh the group students list
+      } catch (error) {
+        console.error('Error removing student from group: ', error);
+        alert('Error removing student from group. Please try again.');
       }
     };
   </script>
