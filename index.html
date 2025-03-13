@@ -89,14 +89,29 @@
     .modal-content li {
       margin: 10px 0;
     }
+
+    /* Total Students Display */
+    .total-students {
+      display: inline-block;
+      padding: 10px 20px;
+      background-color: #2d89ef;
+      color: white;
+      font-size: 1.2em;
+      font-weight: bold;
+      border-radius: 25px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      margin-bottom: 20px;
+    }
   </style>
 </head>
 <body>
   <h1>Edit Student Data by Group</h1>
+  <div id="totalStudents" class="total-students hidden">Total Students: 0</div>
   <input type="text" id="groupName" placeholder="Enter Group Name">
   <button onclick="loadGroupStudents()">Search Group</button>
-  <button onclick="openAddStudentsModal()">Add Students to Group</button>
+  <button onclick="openAddStudentsModal()" id="addStudentsButton" class="hidden">Add Students to Group</button>
   <button onclick="saveAllChanges()" id="saveAllButton" class="hidden">Save All Changes</button>
+  <button onclick="clearAllStudents()" id="clearAllButton" class="hidden">Clear All</button>
   <div id="groupStudentsList"></div>
 
   <!-- Add Students Modal -->
@@ -119,7 +134,7 @@
       apiKey: "AIzaSyBxORm1Up_vSQHnT5WVTqP9I7HKWKsBBm4",
       authDomain: "school-mangement-8ca60.firebaseapp.com",
       projectId: "school-mangement-8ca60",
-      storageBucket: "school-mangement-8ca60.firebasestorage.app",
+      storageBucket: "school-mangement-8ca60.appspot.com",
       messagingSenderId: "313997383681",
       appId: "1:313997383681:web:7b1e55f6c036120c5fc800",
       measurementId: "G-P3JST7V88B"
@@ -132,6 +147,25 @@
     let studentsInGroup = []; // Store loaded students globally
     let allStudents = []; // Store all students for the add students modal
     let selectedStudents = []; // Store selected students to add to the group
+
+    // Function to clear all input fields
+    window.clearInputs = function () {
+      const inputs = document.querySelectorAll('input[type="text"], input[type="number"]');
+      inputs.forEach(input => (input.value = '')); // Clear all input fields
+    };
+
+    // Function to clear all students from the table
+    window.clearAllStudents = function () {
+      const groupStudentsListDiv = document.getElementById('groupStudentsList');
+      groupStudentsListDiv.innerHTML = ''; // Clear the table content
+      studentsInGroup = []; // Clear the global students array
+      document.getElementById('saveAllButton').classList.add('hidden'); // Hide the "Save All" button
+      document.getElementById('clearAllButton').classList.add('hidden'); // Hide the "Clear All" button
+      document.getElementById('totalStudents').classList.add('hidden'); // Hide the total students display
+      document.getElementById('addStudentsButton').classList.add('hidden'); // Hide the "Add Students to Group" button
+      document.getElementById('totalStudents').textContent = 'Total Students: 0'; // Reset total students count
+      clearInputs(); // Clear all input fields
+    };
 
     // Function to load students in a group and display them for editing
     window.loadGroupStudents = async function () {
@@ -160,11 +194,19 @@
           .filter(doc => studentIds.includes(doc.id))
           .map(doc => ({ id: doc.id, ...doc.data() }));
 
+        // Sort students by marks (highest to lowest)
+        studentsInGroup.sort((a, b) => b.marks - a.marks);
+
+        // Display total number of students
+        document.getElementById('totalStudents').textContent = `Total Students: ${studentsInGroup.length}`;
+        document.getElementById('totalStudents').classList.remove('hidden'); // Show total students display
+
         // Display students in a table with editable fields
         let tableHTML = `
           <table>
             <thead>
               <tr>
+                <th>Position</th>
                 <th>Name</th>
                 <th>Grade</th>
                 <th>Attendance</th>
@@ -176,9 +218,10 @@
             <tbody>
         `;
 
-        studentsInGroup.forEach(student => {
+        studentsInGroup.forEach((student, index) => {
           tableHTML += `
             <tr>
+              <td>${index + 1}</td>
               <td><input type="text" id="name_${student.id}" value="${student.name}"></td>
               <td><input type="text" id="grade_${student.id}" value="${student.grade}"></td>
               <td><input type="number" id="attendance_${student.id}" value="${student.attendance}"></td>
@@ -187,7 +230,7 @@
               <td><button onclick="removeStudentFromGroup('${student.id}')">Remove</button></td>
             </tr>
             <tr>
-              <td colspan="6">
+              <td colspan="7">
                 <h4>Courses</h4>
                 <table>
                   <thead>
@@ -233,8 +276,10 @@
           });
         });
 
-        // Show the "Save All" button
+        // Show the "Save All", "Clear All", and "Add Students to Group" buttons
         document.getElementById('saveAllButton').classList.remove('hidden');
+        document.getElementById('clearAllButton').classList.remove('hidden');
+        document.getElementById('addStudentsButton').classList.remove('hidden'); // Show the "Add Students to Group" button
       } catch (error) {
         console.error('Error loading group students: ', error);
         alert('Error loading group students. Please try again.');
